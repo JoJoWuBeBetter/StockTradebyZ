@@ -36,6 +36,7 @@ logger = logging.getLogger("fetch_mktcap")
 for noisy in ("httpx", "urllib3", "_client", "akshare"):
     logging.getLogger(noisy).setLevel(logging.WARNING)
 
+
 # --------------------------- 市值快照 --------------------------- #
 
 def _get_mktcap_ak() -> pd.DataFrame:
@@ -54,13 +55,14 @@ def _get_mktcap_ak() -> pd.DataFrame:
     df["mktcap"] = pd.to_numeric(df["mktcap"], errors="coerce")
     return df
 
+
 # --------------------------- 股票池筛选 --------------------------- #
 
 def get_constituents(
-    min_cap: float,
-    max_cap: float,
-    small_player: bool,
-    mktcap_df: Optional[pd.DataFrame] = None,
+        min_cap: float,
+        max_cap: float,
+        small_player: bool,
+        mktcap_df: Optional[pd.DataFrame] = None,
 ) -> List[str]:
     df = mktcap_df if mktcap_df is not None else _get_mktcap_ak()
 
@@ -80,6 +82,7 @@ def get_constituents(
 
     logger.info("筛选得到 %d 只股票", len(codes))
     return codes
+
 
 # --------------------------- 历史 K 线抓取 --------------------------- #
 COLUMN_MAP_HIST_AK = {
@@ -107,6 +110,7 @@ _FREQ_MAP = {
     10: "3mon",
     11: "year",
 }
+
 
 # ---------- Tushare 工具函数 ---------- #
 
@@ -142,8 +146,9 @@ def _get_kline_tushare(code: str, start: str, end: str, adjust: str) -> pd.DataF
     df["date"] = pd.to_datetime(df["date"])
     df[[c for c in df.columns if c != "date"]] = df[[c for c in df.columns if c != "date"]].apply(
         pd.to_numeric, errors="coerce"
-    )    
+    )
     return df.sort_values("date").reset_index(drop=True)
+
 
 # ---------- AKShare 工具函数 ---------- #
 
@@ -178,9 +183,10 @@ def _get_kline_akshare(code: str, start: str, end: str, adjust: str) -> pd.DataF
     df = df[["date", "open", "close", "high", "low", "volume"]]
     return df.sort_values("date").reset_index(drop=True)
 
+
 # ---------- Mootdx 工具函数 ---------- #
 
-def _get_kline_mootdx(code: str, start: str, end: str, adjust: str, freq_code: int) -> pd.DataFrame:    
+def _get_kline_mootdx(code: str, start: str, end: str, adjust: str, freq_code: int) -> pd.DataFrame:
     symbol = code.zfill(6)
     freq = _FREQ_MAP.get(freq_code, "day")
     client = Quotes.factory(market="std")
@@ -191,35 +197,37 @@ def _get_kline_mootdx(code: str, start: str, end: str, adjust: str, freq_code: i
         return pd.DataFrame()
     if df is None or df.empty:
         return pd.DataFrame()
-    
+
     df = df.rename(
         columns={"datetime": "date", "open": "open", "high": "high", "low": "low", "close": "close", "vol": "volume"}
     )
     df["date"] = pd.to_datetime(df["date"]).dt.normalize()
     start_ts = pd.to_datetime(start, format="%Y%m%d")
     end_ts = pd.to_datetime(end, format="%Y%m%d")
-    df = df[(df["date"].dt.date >= start_ts.date()) & (df["date"].dt.date <= end_ts.date())].copy()    
-    df = df.sort_values("date").reset_index(drop=True)    
+    df = df[(df["date"].dt.date >= start_ts.date()) & (df["date"].dt.date <= end_ts.date())].copy()
+    df = df.sort_values("date").reset_index(drop=True)
     return df[["date", "open", "close", "high", "low", "volume"]]
+
 
 # ---------- 通用接口 ---------- #
 
 def get_kline(
-    code: str,
-    start: str,
-    end: str,
-    adjust: str,
-    datasource: str,
-    freq_code: int = 4,
+        code: str,
+        start: str,
+        end: str,
+        adjust: str,
+        datasource: str,
+        freq_code: int = 4,
 ) -> pd.DataFrame:
     if datasource == "tushare":
         return _get_kline_tushare(code, start, end, adjust)
     elif datasource == "akshare":
         return _get_kline_akshare(code, start, end, adjust)
-    elif datasource == "mootdx":        
+    elif datasource == "mootdx":
         return _get_kline_mootdx(code, start, end, adjust, freq_code)
     else:
         raise ValueError("datasource 仅支持 'tushare', 'akshare' 或 'mootdx'")
+
 
 # ---------- 数据校验 ---------- #
 
@@ -231,18 +239,21 @@ def validate(df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError("数据包含未来日期，可能抓取错误！")
     return df
 
+
 def drop_dup_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[:, ~df.columns.duplicated()]
+
+
 # ---------- 单只股票抓取 ---------- #
 def fetch_one(
-    code: str,
-    start: str,
-    end: str,
-    out_dir: Path,
-    incremental: bool,
-    datasource: str,
-    freq_code: int,
-):    
+        code: str,
+        start: str,
+        end: str,
+        out_dir: Path,
+        incremental: bool,
+        datasource: str,
+        freq_code: int,
+):
     csv_path = out_dir / f"{code}.csv"
 
     # 增量更新：若本地已有数据则从最后一天开始
@@ -258,7 +269,7 @@ def fetch_one(
             logger.exception("读取 %s 失败，将重新下载", csv_path)
 
     for attempt in range(1, 4):
-        try:            
+        try:
             new_df = get_kline(code, start, end, "qfq", datasource, freq_code)
             if new_df.empty:
                 logger.debug("%s 无新数据", code)
@@ -290,7 +301,8 @@ def fetch_one(
 
 def main():
     parser = argparse.ArgumentParser(description="按市值筛选 A 股并抓取历史 K 线")
-    parser.add_argument("--datasource", choices=["tushare", "akshare", "mootdx"], default="tushare", help="历史 K 线数据源")
+    parser.add_argument("--datasource", choices=["tushare", "akshare", "mootdx"], default="tushare",
+                        help="历史 K 线数据源")
     parser.add_argument("--frequency", type=int, choices=list(_FREQ_MAP.keys()), default=4, help="K线频率编码，参见说明")
     parser.add_argument("--exclude-gem", default=True, help="True则排除创业板/科创板/北交所")
     parser.add_argument("--min-mktcap", type=float, default=5e9, help="最小总市值（含），单位：元")
@@ -316,14 +328,14 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # ---------- 市值快照 & 股票池 ---------- #
-    mktcap_df = _get_mktcap_ak()    
+    mktcap_df = _get_mktcap_ak()
 
     codes_from_filter = get_constituents(
         args.min_mktcap,
         args.max_mktcap,
         args.exclude_gem,
         mktcap_df=mktcap_df,
-    )    
+    )
     # 加上本地已有的股票，确保旧数据也能更新
     local_codes = [p.stem for p in out_dir.glob("*.csv")]
     codes = sorted(set(codes_from_filter) | set(local_codes))
