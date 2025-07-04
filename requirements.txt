@@ -4,6 +4,6 @@ numpy~=2.3.1
 pandas~=2.3.0
 tqdm~=4.66.4
 tushare~=1.4.21
-scipy~=2.3.1
+scipy~=1.14.1
 
 ratelimit~=2.2.1
